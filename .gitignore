@@ -1,0 +1,21 @@
+# Folders
+final_dataset/
+final_dataset_detailed/
+final_dataset_slim/
+outputs/
+processed_tuples/
+processed_tuples_slim/
+static_tuples_removed/
+venv/
+__pycache__/
+
+# Docker related
+Dockerfile
+run_Pytorch_Docker_Image.sh
+.dockerignore
+
+# Specific scripts
+check_gpu.py
+
+SimSun.ttf
+do_result.png
