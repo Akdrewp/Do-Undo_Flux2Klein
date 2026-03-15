@@ -1,5 +1,7 @@
 import torch
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
+from diffusers.pipelines.flux2.pipeline_flux2_klein import Flux2KleinPipeline
+from diffusers.models.transformers.transformer_flux2 import Flux2Transformer2DModel
 from diffusers.optimization import get_cosine_schedule_with_warmup
 from peft import LoraConfig, get_peft_model
 
@@ -18,22 +20,23 @@ def getLoraPipeline(model_id: str, device: str):
   Returns:
     pipe (DiffusionPipeline): The complete FLUX pipeline with a trainable LoRA-augmented transformer.
   """
-  
-  
   # 1. Load model
-  pipe = DiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16).to(device)
+  pipe = Flux2KleinPipeline.from_pretrained(
+    model_id, 
+    torch_dtype=torch.bfloat16
+  ).to(device)
 
   # 2. Freeze components
   pipe.vae.requires_grad_(False)
   pipe.text_encoder.requires_grad_(False)
   pipe.transformer.requires_grad_(False)
   
-  # pipe.transformer.enable_gradient_checkpointing()
+  # pipe.transformer.enable_gradient_checkpointing() # Makes slower
 
   # 3. Get Lora PEFT transformer
   lora_config = LoraConfig(
-    r=1024,
-    lora_alpha=512,
+    r=128,
+    lora_alpha=64,
     target_modules=["to_q", "to_k", "to_v", "to_out.0", "add_k_proj", "add_q_proj", "add_v_proj"],
     init_lora_weights="gaussian"
   )

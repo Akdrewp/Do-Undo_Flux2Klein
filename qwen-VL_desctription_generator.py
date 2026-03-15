@@ -10,9 +10,8 @@ from qwen_vl_utils import process_vision_info
 # --- Configuration ---
 MODEL_NAME = "Qwen/Qwen2-VL-2B-Instruct"
 INPUT_DIR = "./processed_tuples"
-OUTPUT_DIR = "./final_dataset_detailed"
-STATIC_FILES_LIST = "static_filenames.txt"
-BATCH_SIZE = 8  # Change to 8 if you have 12GB+ VRAM
+OUTPUT_DIR = "./final_dataset"
+BATCH_SIZE = 32  # Change to 8 if you have 12GB+ VRAM
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 model = Qwen2VLForConditionalGeneration.from_pretrained(
@@ -24,18 +23,21 @@ model = Qwen2VLForConditionalGeneration.from_pretrained(
 )
 
 processor = AutoProcessor.from_pretrained(MODEL_NAME)
-# CRITICAL FOR BATCHING: Generative models must be left-padded
 processor.tokenizer.padding_side = "left"
 
 system_instruction = (
-  "You are an expert video captioner for generative AI datasets. Describe the physical action "
-  "and its exact inverse based on the 3 provided frames. You must provide extremely detailed, vivid descriptions. "
-  "Include the camera angle, lighting, colors, clothing, the exact nature of the grip, the spatial relationship "
-  "of objects, and all background environment details."
+  "You are an expert action describer for AI video datasets. Look at the 3 frames. "
+  "Describe the physical movement, the specific grip or contact point, the direction of motion, and the final change in state. "
+  "Do NOT describe lighting, shadows, camera angles, or background surfaces. "
+  "Write exactly one highly detailed instruction sentence per action. Focus entirely on the mechanics of the manipulation."
   "\n\nExample 1:"
-  "\nAction: close container followed by open container"
-  "\nForward: A detailed description of the conatainer being opened, including the look of the object, background, and movements"
-  "\nReverse: A detailed description of the conatainer being closed, including the look of the object, background, and movements"
+  "\nAction: 'open' followed by 'close' on a drawer"
+  "\nForward: Open the top wooden drawer with the right hand by gripping the handle and pulling it straight backward until it is fully extended."
+  "\nReverse: Close the top wooden drawer with the right hand by pushing the front panel forward until it is completely flush with the desk."
+  "\n\nExample 2:"
+  "\nAction: 'pickup' followed by 'putdown' on a mug"
+  "\nForward: Pick up the ceramic mug with the right hand by grasping its side handle and lifting it vertically off the table."
+  "\nReverse: Put down the ceramic mug with the right hand by lowering it vertically until its base rests flat on the table."
 )
 
 def process_batch(batch_paths):
@@ -122,23 +124,18 @@ def process_batch(batch_paths):
     return results
 
 # --- Setup and Filtering ---
-target_filenames = set()
-if os.path.exists(STATIC_FILES_LIST):
-    with open(STATIC_FILES_LIST, 'r') as f:
-        target_filenames = set(line.strip() for line in f if line.strip())
-
-all_npz_files = [f for f in os.listdir(INPUT_DIR) if f.endswith(".npz")]
-npz_files_to_process = sorted([f for f in all_npz_files if f in target_filenames])
+# Grab every single .npz file in the directory
+all_npz_files = sorted([f for f in os.listdir(INPUT_DIR) if f.endswith(".npz")])
 
 # Filter out files that already have JSONs generated to allow easy resuming
 pending_files = []
-for filename in npz_files_to_process:
+for filename in all_npz_files:
     sample_id = filename.replace(".npz", "")
     output_path = os.path.join(OUTPUT_DIR, f"{sample_id}_meta.json")
     if not os.path.exists(output_path):
         pending_files.append(os.path.join(INPUT_DIR, filename))
 
-print(f"Total files in {STATIC_FILES_LIST}: {len(target_filenames)}")
+print(f"Total .npz files found: {len(all_npz_files)}")
 print(f"Files needing processing: {len(pending_files)}\n")
 
 # --- Batched Execution Loop ---

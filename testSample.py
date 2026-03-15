@@ -1,18 +1,27 @@
 import torch
 import numpy as np
 import json
-from diffusers import DiffusionPipeline
+from diffusers.pipelines.pipeline_utils import DiffusionPipeline
+from diffusers.pipelines.flux2.pipeline_flux2_klein import Flux2KleinPipeline
+from diffusers.models.transformers.transformer_flux2 import Flux2Transformer2DModel
 from safetensors.torch import load_file
 from PIL import Image
 import torch.nn.functional as F
+from peft import PeftModel
 
 MODEL_ID = "black-forest-labs/FLUX.2-klein-9B"
 DEVICE = "cuda"
-SAMPLE_ID = "sample_00122"
+SAMPLE_ID = "sample_02044"
+SEED = 67
+USE_DETAILED = True
+
 
 # --- 1. Load Data ---
-json_path = f"static_test_final_dataset/{SAMPLE_ID}_meta.json"
-npz_path = f"static_test_tuples_slim/{SAMPLE_ID}.npz"
+if (USE_DETAILED):
+  json_path = f"test_final_dataset/{SAMPLE_ID}_meta.json"
+else:
+  json_path = f"final_dataset/{SAMPLE_ID}_meta.json"
+npz_path = f"test_tuples_slim/{SAMPLE_ID}.npz"
 
 with open(json_path, 'r') as f:
     meta = json.load(f)
@@ -33,22 +42,58 @@ def get_consistency_loss(gen_img, target_img):
     return F.mse_loss(t1, t2).item()
 
 # --- 2. Initialize Base Pipeline ---
-pipe = DiffusionPipeline.from_pretrained(MODEL_ID, torch_dtype=torch.bfloat16).to(DEVICE)
+pipe = Flux2KleinPipeline.from_pretrained(
+  MODEL_ID, 
+  torch_dtype=torch.bfloat16
+).to(DEVICE)
 
 # --- 3. Run BASE MODEL ---
 print("Running base model")
-base_do = pipe(prompt=do_prompt, image=io_img, num_inference_steps=25).images[0]
-base_undo = pipe(prompt=undo_prompt, image=if_gt, num_inference_steps=25).images[0]
+# Initialize generator for the 'DO' generation
+gen_do = torch.Generator(device=DEVICE).manual_seed(SEED)
+base_do = pipe(
+    prompt=do_prompt, 
+    image=io_img, # Added strength so it actually uses your image!
+    num_inference_steps=25, 
+    generator=gen_do
+).images[0]
+
+# Initialize a FRESH generator for the 'UNDO' generation
+gen_undo = torch.Generator(device=DEVICE).manual_seed(SEED)
+base_undo = pipe(
+    prompt=undo_prompt, 
+    image=if_gt, 
+    num_inference_steps=25, 
+    generator=gen_undo
+).images[0]
 
 base_loss = get_consistency_loss(base_undo, io_img)
 
 # --- 4. Load LoRA & Run TRAINED MODEL ---
 print("Injecting LoRA")
-state_dict = load_file("./checkpoints_7static_1024rank/doundo_flux_epoch_2/adapter_model.safetensors")
-pipe.load_lora_into_transformer(state_dict, transformer=pipe.transformer)
+pipe.transformer = PeftModel.from_pretrained(
+  pipe.transformer, 
+  "./checkpoints5/epoch_8", 
+  adapter_name="default"
+)
 
-lora_do = pipe(prompt=do_prompt, image=io_img, num_inference_steps=25).images[0]
-lora_undo = pipe(prompt=undo_prompt, image=if_gt, num_inference_steps=25).images[0]
+# Reset the generator EXACTLY as it was for the base 'DO' run
+gen_do_lora = torch.Generator(device=DEVICE).manual_seed(SEED)
+lora_do = pipe(
+    prompt=do_prompt, 
+    image=io_img, 
+    num_inference_steps=25, 
+    generator=gen_do_lora
+).images[0]
+
+# Reset the generator EXACTLY as it was for the base 'UNDO' run
+gen_undo_lora = torch.Generator(device=DEVICE).manual_seed(SEED)
+lora_undo = pipe(
+    prompt=undo_prompt, 
+    image=if_gt, 
+    num_inference_steps=25, 
+    generator=gen_undo_lora
+).images[0]
 
 lora_loss = get_consistency_loss(lora_undo, io_img)
 

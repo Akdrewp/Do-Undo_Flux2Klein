@@ -11,22 +11,25 @@ class DoUndoDataset(Dataset):
     self.npz_dir = npz_dir
     self.json_dir = json_dir
     
-    # npz files containing the do and undo images
+    # 1. Look for NPZs (the images)
     npz_files = {f.replace(".npz", "") for f in os.listdir(npz_dir) if f.endswith(".npz")}
     
-    # Prompts describing action in image
+    # 2. Look for JSONs (the prompts) - stripping the '_meta' suffix for matching
     json_files = {f.replace("_meta.json", "") for f in os.listdir(json_dir) if f.endswith(".json")}
     
-    
-    # Resize to 512x512
+    # 3. Intersection ensures we only train on samples that have BOTH images and prompts
     self.sample_ids = sorted(list(npz_files.intersection(json_files)))
+    
+    if len(self.sample_ids) == 0:
+        raise ValueError(f"No matching files found! Check {npz_dir} and {json_dir}")
+
     self.transform = transform or transforms.Compose([
         transforms.Resize((512, 512)),
         transforms.ToTensor(),
         transforms.Normalize([0.5], [0.5]) 
     ])
     
-    print(f"{len(self.sample_ids)} (Io, Pf, If, Pr) found")
+    print(f"Verified {len(self.sample_ids)} (Io, Pf, If, Pr) tuples ready for training.")
 
   def __len__(self):
     return len(self.sample_ids)

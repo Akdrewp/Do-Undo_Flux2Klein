@@ -20,26 +20,34 @@ root_color = "./datasets/HOI4D_release"
 output_dir = "./processed_tuples"
 os.makedirs(output_dir, exist_ok=True)
 
-def extract_7_frames_decord(video_path, start_t, end_t):
-  """ Extracts 7 frames in between start and end including the start image and final image
-
-  1. Calculate start and end frames
-  2. Get and return 7 evenly samples frames in between
-  
-  Returns:
-    frames (numpy.ndarray): An array of 7 evenly sampled RGB frames with dimensions (7, 512, 512, 3)
+def extract_7_frames_decord(video_path, t_start, t_end, margin=0.10):
+  """ 
+  Extracts 7 frames dynamically squeezed inside the action duration.
+  margin=0.15 means we skip the first 15% and last 15% of the action.
   """
-  # 1. Calculate frame indices
   vr = VideoReader(video_path, ctx=cpu(0), width=512, height=512)
   fps = vr.get_avg_fps()
-  # Add and subtract 4 frames since the annotations
-  # had the time stamps a bit early
-  start_f = int(start_t * fps) + 2
-  end_f = min(int(end_t * fps), len(vr) - 1) - 2
   
-  # 2. Sample 7 frames
+  # Calculate the total duration of the action in seconds
+  duration = t_end - t_start
+  
+  # Squeeze the start and end times inward by the margin percentage
+  safe_start_t = t_start + (duration * margin)
+  safe_end_t = t_end - (duration * margin)
+  
+  # Convert to actual frame indices
+  start_f = int(safe_start_t * fps)
+  end_f = min(int(safe_end_t * fps), len(vr) - 1)
+  
+  # Failsafe: If the action is incredibly short, just use the raw frames
+  if start_f >= end_f:
+      start_f = int(t_start * fps)
+      end_f = min(int(t_end * fps), len(vr) - 1)
+  
+  # Sample 7 frames evenly across this new, safer "meat" of the action
   indices = np.linspace(start_f, end_f, 7, dtype=int)
   frames = vr.get_batch(indices).asnumpy()
+  
   return frames
 
 
