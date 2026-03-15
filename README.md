@@ -47,27 +47,28 @@ Using a RTX PRO 6000 WS and LoRA rank of 128 and an alpha of 64 was used in the 
 
 ### Examples
 
+First column is normal images, second is base Flux2-Klein, third is LoRA model.
+
 ![Toy Car Comparison](/images/red_car.png)
-Forward: Pick up the red toy car with the right hand by gripping its handle and lifting it off the table.
+Forward: Pick up the red toy car with the right hand by gripping its handle and lifting it off the table. \
 Reverse: Put down the red toy car with the right hand by lowering it until its base rests flat on the table.
-First column is normal images, second is base LoRa, third is LoRA model.
 
 Here it is seen the base model hallucinates a different car is the final reversed image while the finetuned version keeps the same car from the original image.
 
 ![Purple Trash Comparison](/images/purple_trash_can.png)
-Forward: Pick up the purple and white object from the table by grasping its handle and lifting it up.
+Forward: Pick up the purple and white object from the table by grasping its handle and lifting it up. \
 Reverse: Put down the purple and white object on the table by placing it back down on the table.
 
 Again the base model completely loses the fact that there is a trash can but the finetuned model keeps it and moves it.
 
 ![Blue Scissors Comparison](/images/blue_scissors.png)
-Forward: Pick up the pair of blue scissors with the right hand by grasping the handles and lifting them off the table.
+Forward: Pick up the pair of blue scissors with the right hand by grasping the handles and lifting them off the table. \
 Reverse: Put down the pair of blue scissors with the right hand by lowering them until their handles touch the table.
 
 Here the base model hallucinates a completely different pair of scissors while the finetuned model keeps the same scissors
 
 ### Statistics
-
+#### L1 difference over 100 test samples
 FINAL THESIS BENCHMARK (100 STEPS) \
 BASE MODEL | Avg L1 :  131.88 \
 LORA MODEL | Avg L1 :  77.51
